@@ -32,15 +32,77 @@ pub enum Error {
     Debug(Option<u8>),
 }
 
-#[derive(Debug, Clone, PartialOrd, PartialEq)]
-pub struct Device {
+#[derive(Debug, Clone, Hash, Eq, PartialOrd, PartialEq)]
+pub struct DeviceFamily(u8);
+
+#[derive(Debug, Clone, Hash, Eq, PartialOrd, PartialEq)]
+pub struct DeviceAddress {
     pub address: [u8; 8]
 }
 
-impl Device {
+impl DeviceAddress {
+    pub fn family(&self) -> DeviceFamily {
+        DeviceFamily(self.family_code())
+    }
+
     pub fn family_code(&self) -> u8 {
         self.address[0]
     }
+}
+
+pub struct Scratchpad {
+
+}
+
+pub enum Value {
+    TemperatureF32(f32),
+    HumidityF32(f32),
+    TempHumF32(f32, f32),
+}
+
+pub trait Driver {
+
+    /// Probes whether this driver wants to take ownership for the given
+    /// `DeviceAddress`. If this method is called, no other driver has yet
+    /// the ownership of the device. If the driver decides to take ownerships
+    fn probe(&mut self, wire: &mut OneWire, device: &DeviceAddress) -> Result<bool, Error>;
+
+    fn open(&mut self, wire: &mut OneWire, device: &DeviceAddress) -> Result<bool, Error>;
+
+    fn read(&mut self, wire: &mut OneWire, device: &DeviceAddress) -> Result<Value, Error>;
+
+    fn read_raw(&mut self, wire: &mut OneWire, device: &DeviceAddress, destination: &mut [u8]) -> Result<usize, Error>;
+
+    fn is_read_raw_supported(&self) -> bool;
+
+    fn write(&mut self, wire: &mut OneWire, device: &DeviceAddress, value: Value) -> Result<(), Error>;
+
+    fn write_raw(&mut self, wire: &mut OneWire, device: &DeviceAddress, source: &mut [u8]) -> Result<usize, Error>;
+
+    fn is_write_raw_supported(&self) -> bool;
+
+    fn close(&mut self, wire: &mut OneWire, device: &DeviceAddress) -> Result<(), Error>;
+
+    fn remove(&mut self, wire: &mut OneWire, device: &DeviceAddress) -> Result<(), Error>;
+}
+
+pub trait OneWire {
+
+    fn read(&mut self, source: &mut [u8]) -> Result<(), Error>;
+
+    fn write(&mut self, destination: &mut [u8]) -> Result<(), Error>;
+
+    fn wait_us(&mut self, us: u16) -> Result<(), Error>;
+}
+
+pub struct DriverDescriptor<'a> {
+    supports: &'a [DeviceFamily],
+    driver: &'a mut Driver,
+}
+
+pub struct DriverDescriptorChain<'a> {
+    descriptor: &'a DriverDescriptor<'a>,
+    next: Option<&'a DriverDescriptorChain<'a>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
